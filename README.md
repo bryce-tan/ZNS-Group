@@ -50,6 +50,7 @@ IDSM ZNS小组使用本平台作为知识库的搭建环境，小组的**任何�
 4. ⚠️ 注意提高可读性。注意图文结合，并适当列举公式，引用文献等等。
 
 可以参考以下文档的示例，该示例展示了背景知识（knowledge）部分的整理文档：
+
 [文献总结示例](./文献总结/example.md)
 
 ## 4 知识汇总-一个以知识点为索引的知识库
@@ -95,6 +96,7 @@ Chen 完成了修改仓库大小的后的实验；
 ## 6 IF YOU ARE NEW TO THIS
 
 **如果你是刚加入team的rookie**，不知道该从何开始入手科研，请移步文档“IF YOU ARE NEW TO THIS”，这个文档将指引你简单上手并入门如何做research！
+
 [IF YOU ARE NEW TO THIS](./IF_YOU_ARE_NEW TO_THIS.md)
 
 ## 7 关于自由贡献者
