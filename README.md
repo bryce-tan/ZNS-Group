@@ -19,7 +19,7 @@ IDSM ZNS小组使用本平台作为知识库的搭建环境，小组的**任何�
 
 | 姓名   | 文献任务 |
 | ------ | -------- |
-| Bryce |**Pathways: Asynchronous Distributed Dataflow for ML**<br /><br />**Achieving us-scale Preemption for Concurrent GPU-accelerated DNN Inferences**<br />**TVM: An Automated End-to-End Optimizing Compiler for Deep Learning**<br />**BaM: A Case for Enabling Fine-grain High Throughput GPU-Orchestrated Access to Storage**          |
+| Bryce |**Pathways: Asynchronous Distributed Dataflow for ML**<br />**Achieving us-scale Preemption for Concurrent GPU-accelerated DNN Inferences**<br />**TVM: An Automated End-to-End Optimizing Compiler for Deep Learning**<br />**BaM: A Case for Enabling Fine-grain High Throughput GPU-Orchestrated Access to Storage**          |
 
 
 ## 3 阅读记录-一个可供自己/他人快速查阅or复习的信息提炼
