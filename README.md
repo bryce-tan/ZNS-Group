@@ -23,7 +23,10 @@ IDSM ZNS小组使用本平台作为知识库的搭建环境，小组的**任何�
 
 | 姓名   | 文献任务 |
 | ------ | -------- |
-| 谭頔凡 |          |
+| 谭頔凡 |- [x] **Pathways: Asynchronous Distributed Dataflow for ML**
+- [ ] **Achieving us-scale Preemption for Concurrent GPU-accelerated DNN Inferences**
+- [x] **TVM: An Automated End-to-End Optimizing Compiler for Deep Learning**
+- [ ] **BaM: A Case for Enabling Fine-grain High Throughput GPU-Orchestrated Access to Storage**          |
 
 - [x] **Pathways: Asynchronous Distributed Dataflow for ML**
 - [ ] **Achieving us-scale Preemption for Concurrent GPU-accelerated DNN Inferences**
