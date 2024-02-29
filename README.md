@@ -78,15 +78,15 @@ IDSM ZNS小组使用本平台作为知识库的搭建环境，小组的**任何�
 
 ### 2024.1.9
 
-谭頔凡 更新了README.md；
+Bryce 更新了README.md；
 
-谭頔凡 对ZenFS的代码进行了阅读，修改了XXXX；
+Bryce 对ZenFS的代码进行了阅读，修改了XXXX；
 
-李晓晓 完成了实验图的绘制；
+Xxl 完成了实验图的绘制；
 
-李佳炜 完成了SCDA的复现，发现存在实验结果XXX的问题；
+Wang 完成了SCDA的复现，发现存在实验结果XXX的问题；
 
-覃梓晋 完成了修改仓库大小的后的实验；
+Chen 完成了修改仓库大小的后的实验；
 
 ## 6 IF YOU ARE NEW TO THIS
 
