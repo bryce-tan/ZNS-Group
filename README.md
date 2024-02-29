@@ -95,9 +95,13 @@ Chen 完成了修改仓库大小的后的实验；
 
 ## 6 IF YOU ARE NEW TO THIS
 
-**如果你是刚加入team的rookie**，不知道该从何开始入手科研，请移步文档“IF YOU ARE NEW TO THIS”，这个文档将指引你简单上手并入门如何做research！
+**如果你是刚加入team的rookie**，不知道该从何开始入手科研，请移步文档“IF_YOU_ARE_NEW_TO_THIS”，这个文档将指引你简单上手并入门如何做research！
 
 [IF YOU ARE NEW TO THIS](./IF_YOU_ARE_NEW TO_THIS.md)
+
+[文献总结示例](./文献总结/example.md)
+
+
 
 ## 7 关于自由贡献者
 
