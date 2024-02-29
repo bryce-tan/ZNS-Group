@@ -16,12 +16,16 @@ IDSM ZNS小组使用本平台作为知识库的搭建环境，小组的**任何�
 
 ## 2 任务规划-一个清晰的研究进展脉络
 
-任务规划DOC指定了每个周的具体任务情况，小组成员需及时完成每周的任务list，从任务规划可以清晰地窥见ZNS小组的研究进展，该文档也可作为日后查阅往日工作的一个主线目录。
+任务规划DOC指定了每个周的具体任务情况，小组成员需及时完成每周的任务list，当任务中的小项完成时，请在该小项后标记[done]，例如：
+
+**Pathways: Asynchronous Distributed Dataflow for ML**<u>[done]</u>
+
+从任务规划可以清晰地窥见ZNS小组的研究进展，该文档也可作为日后查阅往日工作的一个主线目录。
 以下表格是该文档中每周任务的一个示例：
 
-| 姓名   | 文献任务 |
+| 姓名   | 本周任务 |
 | ------ | -------- |
-| Bryce |**Pathways: Asynchronous Distributed Dataflow for ML**<br />**Achieving us-scale Preemption for Concurrent GPU-accelerated DNN Inferences**<br />**TVM: An Automated End-to-End Optimizing Compiler for Deep Learning**<br />**BaM: A Case for Enabling Fine-grain High Throughput GPU-Orchestrated Access to Storage**          |
+| Bryce |**Pathways: Asynchronous Distributed Dataflow for ML<u>**[done]</u><br />**Achieving us-scale Preemption for Concurrent GPU-accelerated DNN Inferences**<br />**TVM: An Automated End-to-End Optimizing Compiler for Deep Learning**<br />**BaM: A Case for Enabling Fine-grain High Throughput GPU-Orchestrated Access to Storage**          |
 
 
 ## 3 阅读记录-一个可供自己/他人快速查阅or复习的信息提炼
@@ -46,7 +50,7 @@ IDSM ZNS小组使用本平台作为知识库的搭建环境，小组的**任何�
 4. ⚠️ 注意提高可读性。注意图文结合，并适当列举公式，引用文献等等。
 
 可以参考以下文档的示例，该示例展示了背景知识（knowledge）部分的整理文档：
-[文献总结示例](https://www.yuque.com/brycetan/sgt67r/zn5wnuzen6h04axy?view=doc_embed)
+[文献总结示例](./文献总结/example.md)
 
 ## 4 知识汇总-一个以知识点为索引的知识库
 
@@ -91,7 +95,7 @@ Chen 完成了修改仓库大小的后的实验；
 ## 6 IF YOU ARE NEW TO THIS
 
 **如果你是刚加入team的rookie**，不知道该从何开始入手科研，请移步文档“IF YOU ARE NEW TO THIS”，这个文档将指引你简单上手并入门如何做research！
-[IF YOU ARE NEW TO THIS](https://www.yuque.com/brycetan/sgt67r/yxkk0cy00km48g1z?view=doc_embed)
+[IF YOU ARE NEW TO THIS](./IF YOU ARE NEW TO THIS.md)
 
 ## 7 关于自由贡献者
 
