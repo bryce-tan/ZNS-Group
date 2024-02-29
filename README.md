@@ -99,7 +99,7 @@ Chen 完成了修改仓库大小的后的实验；
 
 [IF YOU ARE NEW TO THIS](./IF_YOU_ARE_NEW TO_THIS.md)
 
-[文献总结示例](./文献总结/example.md)
+[research guide](/research_guide.md)
 
 
 
