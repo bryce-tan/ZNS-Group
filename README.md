@@ -14,32 +14,13 @@ IDSM ZNS小组使用本平台作为知识库的搭建环境，小组的**任何�
 
 ## 2 任务规划-一个清晰的研究进展脉络
 
-任务规划DOC指定了每个周的具体任务情况，小组成员需及时完成每周的任务list，并在对应的任务完成标记处打勾，like this：
-
-- [x] 👈点击这个button即可
-
-从任务规划可以清晰地窥见ZNS小组的研究进展，该文档也可作为日后查阅往日工作的一个主线目录。
+任务规划DOC指定了每个周的具体任务情况，小组成员需及时完成每周的任务list，从任务规划可以清晰地窥见ZNS小组的研究进展，该文档也可作为日后查阅往日工作的一个主线目录。
 以下表格是该文档中每周任务的一个示例：
 
 | 姓名   | 文献任务 |
 | ------ | -------- |
-| 谭頔凡 |- [x] **Pathways: Asynchronous Distributed Dataflow for ML**
-- [ ] **Achieving us-scale Preemption for Concurrent GPU-accelerated DNN Inferences**
-- [x] **TVM: An Automated End-to-End Optimizing Compiler for Deep Learning**
-- [ ] **BaM: A Case for Enabling Fine-grain High Throughput GPU-Orchestrated Access to Storage**          |
+| Bryce |**Pathways: Asynchronous Distributed Dataflow for ML**<br /><br />**Achieving us-scale Preemption for Concurrent GPU-accelerated DNN Inferences**<br />**TVM: An Automated End-to-End Optimizing Compiler for Deep Learning**<br />**BaM: A Case for Enabling Fine-grain High Throughput GPU-Orchestrated Access to Storage**          |
 
-- [x] **Pathways: Asynchronous Distributed Dataflow for ML**
-- [ ] **Achieving us-scale Preemption for Concurrent GPU-accelerated DNN Inferences**
-- [x] **TVM: An Automated End-to-End Optimizing Compiler for Deep Learning**
-- [ ] **BaM: A Case for Enabling Fine-grain High Throughput GPU-Orchestrated Access to Storage**
-  |
-
-:::info
-Tips:
-完成对应任务记得在框框里打钩，like this👇
-
-- [x] 每日首胜
-  :::
 
 ## 3 阅读记录-一个可供自己/他人快速查阅or复习的信息提炼
 
@@ -109,5 +90,5 @@ difan_tan@hust.edu.cn
 同样欢迎你将阅读到的知识整合到知识汇总中！
 （自由贡献者可以使用非真实姓名进行贡献）
 
-_——README.md written by 谭頔凡_
+_——README.md written by Difan_
 
