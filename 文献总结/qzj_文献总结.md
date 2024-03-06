@@ -57,14 +57,15 @@ ZoneKV adopts a lifetime-based zone storage model and a level-specific zone allo
 1. 对于L0 L1，采用tiering compaction策略。it invalidate all the SSTables in L0 and merge them with SSTables in L1 and produce new SSTables that are finally written to L1.（将L0的所有SSTable无效，然后将L0所有的SSTables与L1的SSTables合并。而且SSTable in L1也会因为L0的tiering compaction策略，最后和L0合并----------进而导致L0 和 L1的SSTable有相似的Lifetime） 
 2. 对于L2 L3...... 采用leveling compaction策略。leveling compaction会用循环赛的方式选择 L i 的一个SSTable  A，然后将其与L i+1的所有与SSTable A关键字重叠的 SSTables 进行合并
 <br>
-- 英文总结：
+  
+- 英文总结  
 1. Lifetime-Based Zone Storage. ZoneKV proposes to maintain SSTables with a similar lifetime in one zone to reduce space amplification and improve space efficiency. ZoneKV does not maintain the lifetime information for each SSTable explicitly but uses the level number of each SSTable to infer the lifetime implicitly. Such a design can avoid memory usage and maintain cost of the lifetime information. 
 2. Level-Specific Zone Allocation. First, ZoneKV proposes to put L0 and L1 in one zone because the SSTables in these two levels have a similar lifetime. Second, ZoneKV horizontally partitions all the SSTables in L i (i ≥ 2) into slices,
 and each slice is stored in one zone.<br>
 ![img](https://cdn.nlark.com/yuque/0/2024/png/42361192/1705471487148-62b5ae44-7bbf-4981-9458-aa3a61da494d.png)
 &emsp;&emsp;从上图可以看出，尽可能把 lifetime 相近的文件（在同一个level的文件）放在同一个zone中。<br>
 &emsp;&emsp;Log文件**单独存储**在Disk中的一个部分，Log文件append-only and never update therefore their lifetime can be regarded as infinity.<br>
-&emsp;&emsp;**传统的磁盘**IO栈需要一系列IO子系统（例如Kernel file system、block layer、IO scheduling layer 和  block device driver layer），这些IO子系统形成的长链会降低数据存储的效率，较少磁盘吞吐和数据存储效率. <br>
+&emsp;&emsp; **传统的磁盘**IO栈需要一系列IO子系统（例如Kernel file system、block layer、IO scheduling layer 和  block device driver layer），这些IO子系统形成的长链会降低数据存储的效率，较少磁盘吞吐和数据存储效率. <br>
 &emsp;&emsp;ZoneKV则与ZNS SSD直接对接,跳过了中间的这些IO栈,进而提高了性能.<br>
 &emsp;&emsp;data placement也有讲究:Level 0和 Level 1的SSTables被放入到同一个zone里,然后其余Level i (i >= 2 )的SSTables被放到多个不同的zone中(1.是因为一个zone放不下level 低的所有SSTables  2.是因为我们的同一个level的SSTables的Lifetime 亦有差异 由于是用rocksdb实现的, rocksdb 又偏爱 先对小keys的SSTables进行合并).<br>
 &emsp;&emsp;So,对于较低level 的 SSTable 也要对其进行分组(group),根据key range分组(因为key range 相同或相近的 其生命周期也往往相同)来将同一个 group 放到同一个 zone里.<br>
