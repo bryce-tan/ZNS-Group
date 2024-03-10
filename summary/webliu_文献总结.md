@@ -1,5 +1,7 @@
 # 阅读记录
 
+ZNS: Avoiding the Block Interface Tax for Flash-based SSDs
+
 ## 背景
 
 传统接口的一些特性：
