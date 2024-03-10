@@ -267,3 +267,173 @@ throughput and latency情况。
 在THS较高的情况下，CAZA（相较LIZA）才能体现出它的优势。
 Suspect that this insignificant performance difference is because (i) we use DRAM-emulated ZNS without considering the NAND latency of ZNS, and (ii) the implementation overhead for CAZA greatly affects DRAM-emulated ZNS. However, if an actual ZNS device is used, it is expected that CAZA will outperform LIZA.<br>
 ## 改进思考
+
+-------------
+# 论文 3.Seperating Data via Block Invalidation Time Inference for Write Amplification Reduction in Log-Structured Storage
+
+[论文原文在此](https://www.usenix.org/system/files/fast22-wang.pdf)<br>
+
+&emsp;&emsp;本文设计了Sepbit数据放置策略来最小化WA开销;并且设置了原型实验，以及采取了阿里云和腾讯云的数据进行了分析，并和最优数据放置策略进行对比，得出SepBIT效果卓越的结论；<br>
+<br>
+
+
+## 背景知识
+<center>
+    <img style="border-radius: 0.3125em;
+    box-shadow: 0 2px 4px 0 rgba(34,36,38,.12),0 2px 10px 0 rgba(34,36,38,.08);" 
+    src="https://cdn.nlark.com/yuque/0/2024/png/42361192/1709797130947-f6a75417-297b-40c3-b540-7db9a69fcb1a.png?x-oss-process=image%2Fresize%2Cw_1500%2Climit_0">
+    <br>
+    <div style="color:orange; border-bottom: 1px solid #d9d9d9;
+    display: inline-block;
+    color: #999;
+    padding: 2px;"></div>
+</center>
+&emsp;&emsp;数据放置流程图如上所示；写block的操作有两种:
+
+1. user_written blocks
+2. Gc-Rewritten blocks
+<br>
+&emsp;&emsp;GC操作大致可抽象出3步：triggering、selection、rewriting。<br>
+&emsp;&emsp;本项目中的triggering由GP阈值触发:一个volume的无效块占比$\frac{invalid\space blocks}{invalid\space blocks+valid\space blocks}$;当无效块占比超过该阈值会触发trigger机制<br>
+&emsp;&emsp;Selection:选择一个或多个sealed segments for GC(garage collection)<br>
+&emsp;&emsp;ReWriting:discard invalid blocks from sealed segments and writes back the remaining valid blocks into one or multiple open segments.
+
+&emsp;&emsp;对于log-structured storage来说，其组成如下图：<br>
+<center>
+    <img style="border-radius: 0.3125em;
+    box-shadow: 0 2px 4px 0 rgba(34,36,38,.12),0 2px 10px 0 rgba(34,36,38,.08);" 
+    src="https://cdn.nlark.com/yuque/0/2024/png/42361192/1709799456688-e74acadf-2a00-4135-9652-fce9d4aaac31.png?x-oss-process=image%2Fresize%2Cw_1500%2Climit_0">
+    <br>
+    <div style="color:orange; border-bottom: 1px solid #d9d9d9;
+    display: inline-block;
+    color: #999;
+    padding: 2px;">figure 2 log-structured system composition</div>
+</center><br>
+&emsp;&emsp;每一个block要么是由于客户的new write 请求 要么是一个现存block的更新操作，block会被加入到一个segment(open segment which still accepts blocks );当一个segment满后(reach maximum size)，segment 变成immutable segement(in this paper called sealed segment)<br>
+&emsp;&emsp;更新block属于一个out-of-place的过程。直接更新在别的块中而不改变当前块。<br>
+
+&emsp;&emsp;WA(写放大)定义为:$\frac{user-written\space blocks+GC\space re-rewritten\space blocks}{user-written\space blocks}$<br>
+&emsp;&emsp;WA=1时为最优，即当 **re-written blocks=0** 时,但实现它是**不切实际**的。原因是：
+  1. 不可能预先知道每个block的BIT值
+  2. open segment的值k=$\lceil\frac{m}{s} \rceil$也不好设置
+
+&emsp;&emsp;在设计的时候会考虑将BIT相近的优先放在同一个块中，之后在GC时的开销便也会相应减少。主要研究Alibaba cloud的traces<br>
+&emsp;&emsp;通过分析，由3个观察结果
+1. User-written blocks generally have short lifespan while GC-rewritten blocks generally have long lifespans.因此区分这两种写操作是非常有必要的。
+2. Frequently updated blocks have highly varying lifespans.
+3. Rarely updated blocks dominate and have highly varying lifespans.
+
+&emsp;&emsp;实验结果2、3表明我们现在采用的基于温度的数据放置策略不能够很好地缓解WA的问题（因为rarely updated blocks通常被视为cold blocks被放在一起，而frequently updated blocks 通常被看作hot blocks被存放在一起）<br>
+
+
+## 方法设计
+&emsp;&emsp;SepBIT:依据BIT(block invalidation time)值来进行数据放置，将blocks分成user-written blocks和GC rewritten blocks.
+
+<center>
+    <img style="border-radius: 0.3125em;
+    box-shadow: 0 2px 4px 0 rgba(34,36,38,.12),0 2px 10px 0 rgba(34,36,38,.08);" 
+    src="https://cdn.nlark.com/yuque/0/2024/png/42361192/1709870996658-65cb2c06-3824-492c-996e-edea4bf231f5.png?x-oss-process=image%2Fresize%2Cw_1374%2Climit_0">
+    <br>
+    <div style="color:orange; border-bottom: 1px solid #d9d9d9;
+    display: inline-block;
+    color: #999;
+    padding: 2px;">figure 3 SepBIT workflow</div>
+</center><br>
+
+&emsp;&emsp;当前的SEPBIT有six classes of segments，其中class 1-2对应了user-written blocks的segments，class 3-6对应了GC-written blocks。每一个class都有1个open segment和多个sealed
+segments。一旦open segment达到了最大size，it is sealed 并且保存在相同的class当中。<br>
+&emsp;&emsp;SepBIT推断blocks的生命期和其各自的BIT，其推断原则是:
+- for user-written blocks,SepBIT将生命期短的Blocks存到Class 1，生命期长的存在Class 2.
+- for GC-rewritten blocks SepBIT会将由于GC操作要被复写的Class 1的块添加到Class 3中,通过对BITS推断,将具有相似BIT。
+
+&emsp;&emsp;SepBIT的主要思想如下：
+- 对于 user-written block:若是来自一个new write,该block的Lifespan 设置为infinite;若是由于旧block的更新，**SepBIT用旧块的生命周期**(上一个用户写直到无效了这段时间之内，整个工作负载用户写的字节数)来**估计其生命周期。**
+- 对于GC-rewritten block,SepBIT根据其年龄age(user-written 从**上一个用户写**直到它被GC重写变得无效的过程中、在整个工作负载中的字节数)来推断其剩余生命期(在**GC复写直到它无效/直到traces结束**整个过程中一共复写的字节数)，**SepBIT用其年龄age，将age相似的放在同一个class(segment)当中。**
+&emsp;&emsp;因此，GC复写块的生命期是年龄加上其剩余生命周期。
+
+&emsp;&emsp;SepBIT的工作流程如上图 **figure 3**<br>
+&emsp;&emsp;SepBIT推断blocks的生命期和其相应blocks的BIT。<br>
+
+&emsp;&emsp;figure4则很能说明我们上面关于lifespan的论述<br>
+
+<center>
+    <img style="border-radius: 0.3125em;
+    box-shadow: 0 2px 4px 0 rgba(34,36,38,.12),0 2px 10px 0 rgba(34,36,38,.08);" 
+    src="https://cdn.nlark.com/yuque/0/2024/png/42361192/1709891505596-684e3d7e-c2dd-4076-94de-be42e6a3e547.png?x-oss-process=image%2Fformat%2Cwebp">
+    <br>
+    <div style="color:orange; border-bottom: 1px solid #d9d9d9;
+    display: inline-block;
+    color: #999;
+    padding: 2px;">figure 4 infering of blocks</div>
+</center><br>
+&emsp;&emsp;该论文也对前面我们提到的关于infer BIT of user-write block和GC rewrite block的有关结论进行了数学上的计算和实验验证。<br>
+
+&emsp;&emsp; **变量含义:** 对于**inferring BIT of User-Written Blocks**由于根据前面的设计，lifespan的单位是byte,令n为逻辑块地址的数量（1-n），pi是每一个写请求中(LBAi)被写的概率。一个write-only request sequence of blocks(块的请求序列)，这些块中的每一个块都与一个序列b(b确定块的信息)和逻辑地址Ab(Ab确定块b对应的地址)有关。其中b表示用户新写的块，而b'表示被b取代了的invadiated的块，又自然有$A_{b}=A_{b'}$。
+
+
+&emsp;&emsp;因此得到$estimated\space BIT_b=current\space user\space write\space time+u$。其中u和v都是以块为单位的。条件概率$P(u\leq u_{0}|v\leq v_{0})=\frac{P(u\leq u_{0}\space and v\leq v_{0})}{P(v\le v_{0})}$，根据Zipf分布来进行计算，该条件概率的含义是当被取代块b'的lifespan小于一个阈值$v_{0}$时，取代块b同样也小于一个阈值的概率。$u_{0}和v_{0}$分别是u和v的可能的阈值<br>
+&emsp;&emsp;可能是将得到的block按照降序的顺序进行排序1~n，因此有$p_{i}=\frac{\sum_{i=1}^{n}(1-(1-p_{i})^{u_0})\cdot(1-(1-p_{i})^{v_{0}})p_{i}}{\sum_{i=1}^{n}(1-(1-p_{i})^v0))\cdot p_{i}}$应该是对所有情况的一个列举。
+
+<center>
+    <img style="border-radius: 0.3125em;
+    box-shadow: 0 2px 4px 0 rgba(34,36,38,.12),0 2px 10px 0 rgba(34,36,38,.08);" 
+    src="https://cdn.nlark.com/yuque/0/2024/png/42361192/1709985245397-c588dbff-1acb-4d3a-89f8-89241b491bc4.png">
+    <br>
+    <div style="color:orange; border-bottom: 1px solid #d9d9d9;
+    display: inline-block;
+    color: #999;
+    padding: 2px;">figure 5 条件概率推导</div>
+</center><br>
+
+&emsp;&emsp;根据此，并进行试验，得出了a user-written block is
+highly likely to have a short lifespan if its invalidated block also has a short lifespan.（也就是lifespan小的更有可能取代lifespan小的块），因此用lifespan小的块u'(old block的lifespan)去infer v' 。除此之外还有一个发现$v_{0}$越小，对越小，对应的条件概率越大（也即被取代的块b'的v越小取代它的b的u也就越小）
+
+&emsp;&emsp;关于Inferring BITs of GC-Rewritten Blocks:同样也是从数学推导和实验数据两个方面来对之前提到的关于residual lifespan结论进行证明;SepBIT通过GC rewritten block的age来估计其residual lifespan，而其$BIT_{GC\space rewritten\space block}=current\space GC-\space write\space time+estimated\space residual\space lifespan$。<br>
+&emsp;&emsp;GC-rewritten块是由user-written块转换而来的，因此用user-written 块对应的number b来描述该GC-rewritten块，u,g,r分别表示其lifespan,age,residual lifespan,因此u=g+r(上面三个变量均以block为单位);通过数学描述和实验证明，得出了当g小的话其r值也会笑。之后便是和上面一样在对其条件概率进行数学分析，已经用实验进行验证。<br>
+&emsp;&emsp;对user-written blocks,用lifespan threshold来分割短期blocks和长期blocks，对GC-rewritten blocks，我们需要多个age thresholds来分割。上面的这些lifespan都是通过从segment被创建之后(如从第一个block被加入到该segment中然后到由于GC被收回的这段时间)在工作负载中用户写的字节数来定义的。根据多个固定数量的最近被回收的segment的lifespan值的大小，算出其average segment lifespan $l$ ，对于每一个用户写块$userwritten\space block$,如果它要取代一个lifespan 少于$l$的块，我们就将其写入到class1，否则将其写入到class2（所对应的segment）。对于GC-rewritten blocks,关于age的threshold我们设置为l的倍数。<br>
+&emsp;&emsp;关于算法的细节，算法展示的是SepBIT的伪代码，包括3个函数 :GarbageCollect,UserWrite和GCWrite，如下图所示：
+<center>
+    <img style="border-radius: 0.3125em;
+    box-shadow: 0 2px 4px 0 rgba(34,36,38,.12),0 2px 10px 0 rgba(34,36,38,.08);" 
+    src="https://cdn.nlark.com/yuque/0/2024/png/42361192/1710040711454-df74b956-9bba-4c2a-94b1-580163a8a211.png?x-oss-process=image%2Fresize%2Cw_1326%2Climit_0">
+    <br>
+    <div style="color:orange; border-bottom: 1px solid #d9d9d9;
+    display: inline-block;
+    color: #999;
+    padding: 2px;">figure 6 SepBIT算法</div>
+</center><br>
+
+### 算法介绍
+
+&emsp;&emsp;其中t是时间戳，用于确定当前要插入的block，初始的平均lifespan $l$ 设置为正无穷(之后会动态变化)<br>
+&emsp;&emsp;GC由于GC操作被激活（基于2.1讲的GC策略，如当GP(garbage proportion)率很高时会触发），它执行GC操作。通过执行例如基于贪心的选择算法，计算出被收集的Class 1 的segement的lifespan的总和 $l_{tot}$ ，并且计算平均值 $l=l_{tot}\div n{c}$，其中$n_{c}$是回收段的数量。<br>
+&emsp;&emsp;UserWrite处理每一个user-written block。首先计算无效老块b'的lifespan(也即前面提到的v)，若$v<l$(即将b视为一个short-lived block)，UserWrite会将b加入到CLass1的open segment当中。否则将其(视为long-lived block)放入到Class 2中的一个open segment当中。<br>
+&emsp;&emsp;GCWrite处理与user-written block b对应的GC-rewritten block。若b存储在Class 1中，GCWrite会将b产生的GC-rewritten block append 到Class 3对应的open segment当中。若b存储在Class 2当中,GCWrite会依据块b的 **age** 将b所产生的GC-rewritten块 append到Class 4、5、6中去，对应的范围分别是$[0,4l) ,[4l,16l),[16l,+\infin)$ <br>
+&emsp;&emsp;至于内存使用情况，SepBIT仅仅存储每一个block上一次用户写的时间（作为元数据）在磁盘的每一个块上。
+<br>
+&emsp;&emsp;其中Prototype是模拟的，原型当中每个segment是一个一一映射(一个segment对应一个Zonefile:为ZenFS zoned storage backend的基本单元).有关ZenFS的介绍可以查找该论文的相关段落。<br>
+
+
+## 实验结果
+&emsp;&emsp;本论文一共做了9组实验，分别研究了impact of segment selection 、impact of segment sizes、impact of GP thresholds、BIT inference、Breakdown analysis、Results on tencent cloud traces、workload skewness、Memory overhead and Prototype evaluation。<br>
+&emsp;&emsp;每个用户写将LBA提升到一个hotter segment，然而每个GC写将LBA降级到一个colder segment。对温度的刻画使用一个基于温度(用write count或者其他的方式来量化，基于策略的不同而相异)的计数器。<br>
+&emsp;&emsp;实验考量了SepBIT以及基于温度的算法如 DAC、SFS、ML、ETI、MQ、Seqyetniality、Frequency、Recency、Fading Average Data Classifier and WARCIP。考虑了3大baseline strategies:NoSep(noseperate)、SepGC(seperate and gc)、FK（future knowledge）并且基于不同的算法做了适应性调整。<br>
+
+&emsp;&emsp; **实验结果**如下:<br> 
+1. SepBIT achieves the lowest WA among all data placement
+schemes (except FK) for different segment selection algorithms (Exp#1), different segment sizes (Exp#2), and different GP thresholds
+2. We show that SepBIT provides accurate BIT inference (Exp#4).
+3. We provide a breakdown analysis on SepBIT, and show that
+it achieves a low WA by separating each set of user-written blocks and GC-rewritten blocks independently (Exp#5).
+4. SepBIT achieves the lowestWA in the Tencent Cloud traces
+(Exp#6).
+5. SepBIT shows high WA reduction for highly skewed work-
+loads (Exp#7).
+6. We provide a memory overhead analysis and show that
+SepBIT achieves low memory overhead for a majority of
+the volumes (Exp#8).
+7. Our prototype evaluation shows that SepBIT achieves the highest throughput in a majority of the volumes (Exp#9).
+   <br>&emsp;&emsp;
+   默认的GC策略运用Cost-Benefit策略进行segment selection并且将segment size和GP threshold固定（该策略在前面已经将结果）
+
+## 改进思考
