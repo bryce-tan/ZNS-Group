@@ -434,6 +434,6 @@ SepBIT achieves low memory overhead for a majority of
 the volumes (Exp#8).
 7. Our prototype evaluation shows that SepBIT achieves the highest throughput in a majority of the volumes (Exp#9).
    <br>&emsp;&emsp;
-   默认的GC策略运用Cost-Benefit策略进行segment selection并且将segment size和GP threshold固定（该策略在前面已经将结果）
+   默认的GC策略运用Cost-Benefit策略进行segment selection并且将segment size和GP threshold固定（该策略在前面已经讲过）
 
 ## 改进思考
