@@ -407,9 +407,9 @@ highly likely to have a short lifespan if its invalidated block also has a short
 
 ### 算法介绍
 
-&emsp;&emsp;其中t是时间戳，用于确定当前要插入的block，初始的平均lifespan $ l $ 设置为正无穷(之后会动态变化)<br>
+&emsp;&emsp;其中t是时间戳，用于确定当前要插入的block，初始的平均lifesp $l$ 设置为正无穷(之后会动态变化)<br>
 &emsp;&emsp;GC由于GC操作被激活（基于2.1讲的GC策略，如当GP(garbage proportion)率很高时会触发），它执行GC操作。通过执行例如基于贪心的选择算法，计算出被收集的Class 1 的segement的lifespan的总和 $l_{tot}$ ，并且计算平均值 $l=l_{tot}\div n{c}$，其中 $n_{c}$ 是回收段的数量。<br>
-&emsp;&emsp;UserWrite处理每一个user-written block。首先计算无效老块b'的lifespan(也即前面提到的v)，若 $v<l$ (即将b视为一个short-lived block)，UserWrite会将b加入到CLass1的open segment当中。否则将其(视为long-lived block)放入到Class 2中的一个open segment当中。<br>
+&emsp;&emsp;UserWrite处理每一个user-written block。首先计算无效老块b'的lifespan(也即前面提到的v)，若$v$<$l$ (即将b视为一个short-lived block)，UserWrite会将b加入到CLass1的open segment当中。否则将其(视为long-lived block)放入到Class 2中的一个open segment当中。<br>
 &emsp;&emsp;GCWrite处理与user-written block b对应的GC-rewritten block。若b存储在Class 1中，GCWrite会将b产生的GC-rewritten block append 到Class 3对应的open segment当中。若b存储在Class 2当中,GCWrite会依据块b的 **age** 将b所产生的GC-rewritten块 append到Class 4、5、6中去，对应的范围分别是[0,4 $l$ ),[4 $l$ ,16 $l$ ),[16 $l$ ,+ $\infin$ ) <br>
 &emsp;&emsp;至于内存使用情况，SepBIT仅仅存储每一个block上一次用户写的时间（作为元数据）在磁盘的每一个块上。
 <br>
