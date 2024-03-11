@@ -368,13 +368,12 @@ segments。一旦open segment达到了最大size，it is sealed 并且保存在�
 </center><br>
 &emsp;&emsp;该论文也对前面我们提到的关于infer BIT of user-write block和GC rewrite block的有关结论进行了数学上的计算和实验验证。<br>
 
-&emsp;&emsp; **变量含义:** 对于**inferring BIT of User-Written Blocks**由于根据前面的设计，lifespan的单位是byte,令n为逻辑块地址的数量（1-n），pi是每一个写请求中(LBAi)被写的概率。一个write-only request sequence of blocks(块的请求序列)，这些块中的每一个块都与一个序列b(b确定块的信息)和逻辑地址Ab(Ab确定块b对应的地址)有关。其中b表示用户新写的块，而b'表示被b取代了的invadiated的块，又自然有$A_{b}=A_{b'}$。
+&emsp;&emsp; **变量含义:** 对于**inferring BIT of User-Written Blocks**由于根据前面的设计，lifespan的单位是byte,令n为逻辑块地址的数量（1-n），pi是每一个写请求中(LBAi)被写的概率。一个write-only request sequence of blocks(块的请求序列)，这些块中的每一个块都与一个序列b(b确定块的信息)和逻辑地址Ab(Ab确定块b对应的地址)有关。其中b表示用户新写的块，而b'表示被b取代了的invadiated的块，又自然有 $A_{b}=A_{b'}$。
 
 
-&emsp;&emsp;因此得到 $estimated\space BIT_b=current\space user\space write\space time+u$。其中u和v都是以块为单位的。条件概率 $P(u\leq u_{0}|v\leq v_{0})=\frac{P(u\leq u_{0}\space and v\leq v_{0})}{P(v\le v_{0})}$，根据Zipf分布来进行计算，该条件概率的含义是当被取代块b'的lifespan小于一个阈值$v_{0}$时，取代块b同样也小于一个阈值的概率。$u_{0}和v_{0}$分别是u和v的可能的阈值<br>
+&emsp;&emsp;因此得到 $estimated\space BIT_b=current\space user\space write\space time+u$。其中u和v都是以块为单位的。条件概率 $P(u\leq u_{0}|v\leq v_{0})=\frac{P(u\leq u_{0}\space and v\leq v_{0})}{P(v\le v_{0})}$，根据Zipf分布来进行计算，该条件概率的含义是当被取代块b'的lifespan小于一个阈值$v_{0}$时，取代块b同样也小于一个阈值的概率。$u_{0}$ 和 $v_{0}$ 分别是u和v的可能的阈值<br>
 &emsp;&emsp;
-可能是将得到的block按照降序的顺序进行排序1~n，因此有
-$p_{i}$=$\frac{\sum_{i=1}^{n}(1-(1-p_{i})^{u_0})\cdot(1-(1-p_{i})^{v_{0}})p_{i}}{\sum_{i=1}^{n}(1-(1-p_{i})^v0)\cdot p_{i}}$应该是对所有情况的一个列举。<br>
+可能是将得到的block按照降序的顺序进行排序1~n，因此有 $p_{i}$ = $\frac{ \sum_{i=1}^{n} (1-(1-p_{i})^{u_0})\cdot (1-(1-p_{i})^{v_{0} } ) p_{i} }{ \sum_{i=1}^{n}(1-(1-p_{i}) ^ v0) \ cdot p_{i} }$ 应该是对所有情况的一个列举。<br>
 
 <center>
     <img style="border-radius: 0.3125em;
@@ -389,11 +388,11 @@ $p_{i}$=$\frac{\sum_{i=1}^{n}(1-(1-p_{i})^{u_0})\cdot(1-(1-p_{i})^{v_{0}})p_{i}}
 
 &emsp;&emsp;根据此，并进行试验，得出了a user-written block is
 highly likely to have a short lifespan if its invalidated block also has a short lifespan.（也就是lifespan小的更有可能取代lifespan小的块），因此用lifespan小的块u'(old block的lifespan)去infer v' 。除此之外还有一个发现
-$v_{0}$越小，对越小，对应的条件概率越大（也即被取代的块b'的v越小取代它的b的u也就越小）<br>
+ $v_{0}$ 越小，对越小，对应的条件概率越大（也即被取代的块b'的v越小取代它的b的u也就越小）<br>
 
 &emsp;&emsp;关于Inferring BITs of GC-Rewritten Blocks:同样也是从数学推导和实验数据两个方面来对之前提到的关于residual lifespan结论进行证明;SepBIT通过GC rewritten block的age来估计其residual lifespan，而其 $BIT_{GC\space rewritten\space block}=current\space GC-\space write\space time+estimated\space residual\space lifespan$。<br>
 &emsp;&emsp;GC-rewritten块是由user-written块转换而来的，因此用user-written 块对应的number b来描述该GC-rewritten块，u,g,r分别表示其lifespan,age,residual lifespan,因此u=g+r(上面三个变量均以block为单位);通过数学描述和实验证明，得出了当g小的话其r值也会笑。之后便是和上面一样在对其条件概率进行数学分析，已经用实验进行验证。<br>
-&emsp;&emsp;对user-written blocks,用lifespan threshold来分割短期blocks和长期blocks，对GC-rewritten blocks，我们需要多个age thresholds来分割。上面的这些lifespan都是通过从segment被创建之后(如从第一个block被加入到该segment中然后到由于GC被收回的这段时间)在工作负载中用户写的字节数来定义的。根据多个固定数量的最近被回收的segment的lifespan值的大小，算出其average segment lifespan $l$ ，对于每一个用户写块$userwritten\space block$,如果它要取代一个lifespan 少于$ l$的块，我们就将其写入到class1，否则将其写入到class2（所对应的segment）。对于GC-rewritten blocks,关于age的threshold我们设置为l的倍数。<br>
+&emsp;&emsp;对user-written blocks,用lifespan threshold来分割短期blocks和长期blocks，对GC-rewritten blocks，我们需要多个age thresholds来分割。上面的这些lifespan都是通过从segment被创建之后(如从第一个block被加入到该segment中然后到由于GC被收回的这段时间)在工作负载中用户写的字节数来定义的。根据多个固定数量的最近被回收的segment的lifespan值的大小，算出其average segment lifespan $ l $，对于每一个用户写块 $ userwritten\space block$,如果它要取代一个lifespan 少于 $ l $ 的块，我们就将其写入到class1，否则将其写入到class2（所对应的segment）。对于GC-rewritten blocks,关于age的threshold我们设置为l的倍数。<br>
 &emsp;&emsp;关于算法的细节，算法展示的是SepBIT的伪代码，包括3个函数 :GarbageCollect,UserWrite和GCWrite，如下图所示：
 <center>
     <img style="border-radius: 0.3125em;
@@ -408,10 +407,10 @@ $v_{0}$越小，对越小，对应的条件概率越大（也即被取代的块b
 
 ### 算法介绍
 
-&emsp;&emsp;其中t是时间戳，用于确定当前要插入的block，初始的平均lifespan $l$ 设置为正无穷(之后会动态变化)<br>
-&emsp;&emsp;GC由于GC操作被激活（基于2.1讲的GC策略，如当GP(garbage proportion)率很高时会触发），它执行GC操作。通过执行例如基于贪心的选择算法，计算出被收集的Class 1 的segement的lifespan的总和 $l_{tot}$ ，并且计算平均值 $l=l_{tot}\div n{c}$，其中$n_{c}$是回收段的数量。<br>
-&emsp;&emsp;UserWrite处理每一个user-written block。首先计算无效老块b'的lifespan(也即前面提到的v)，若$v<l$(即将b视为一个short-lived block)，UserWrite会将b加入到CLass1的open segment当中。否则将其(视为long-lived block)放入到Class 2中的一个open segment当中。<br>
-&emsp;&emsp;GCWrite处理与user-written block b对应的GC-rewritten block。若b存储在Class 1中，GCWrite会将b产生的GC-rewritten block append 到Class 3对应的open segment当中。若b存储在Class 2当中,GCWrite会依据块b的 **age** 将b所产生的GC-rewritten块 append到Class 4、5、6中去，对应的范围分别是[0,4$l$),[4$l$,16$l$),[16$l$,+$\infin$) <br>
+&emsp;&emsp;其中t是时间戳，用于确定当前要插入的block，初始的平均lifespan $ l $ 设置为正无穷(之后会动态变化)<br>
+&emsp;&emsp;GC由于GC操作被激活（基于2.1讲的GC策略，如当GP(garbage proportion)率很高时会触发），它执行GC操作。通过执行例如基于贪心的选择算法，计算出被收集的Class 1 的segement的lifespan的总和 $l_{tot}$ ，并且计算平均值 $l=l_{tot}\div n{c}$，其中 $n_{c}$ 是回收段的数量。<br>
+&emsp;&emsp;UserWrite处理每一个user-written block。首先计算无效老块b'的lifespan(也即前面提到的v)，若 $v<l$ (即将b视为一个short-lived block)，UserWrite会将b加入到CLass1的open segment当中。否则将其(视为long-lived block)放入到Class 2中的一个open segment当中。<br>
+&emsp;&emsp;GCWrite处理与user-written block b对应的GC-rewritten block。若b存储在Class 1中，GCWrite会将b产生的GC-rewritten block append 到Class 3对应的open segment当中。若b存储在Class 2当中,GCWrite会依据块b的 **age** 将b所产生的GC-rewritten块 append到Class 4、5、6中去，对应的范围分别是[0,4 $l$ ),[4 $l$ ,16 $l$ ),[16 $l$ ,+ $\infin$ ) <br>
 &emsp;&emsp;至于内存使用情况，SepBIT仅仅存储每一个block上一次用户写的时间（作为元数据）在磁盘的每一个块上。
 <br>
 &emsp;&emsp;其中Prototype是模拟的，原型当中每个segment是一个一一映射(一个segment对应一个Zonefile:为ZenFS zoned storage backend的基本单元).有关ZenFS的介绍可以查找该论文的相关段落。<br>
@@ -440,3 +439,8 @@ the volumes (Exp#8).
    默认的GC策略运用Cost-Benefit策略进行segment selection并且将segment size和GP threshold固定（该策略在前面已经讲过）
 
 ## 改进思考
+
+
+# 论文4.ZNS+: Advanced Zoned Namespace Interface for Supporting In-Storage Zone Compaction
+
+[论文原文在此](https://www.usenix.org/system/files/osdi21-han.pdf)
