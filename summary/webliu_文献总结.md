@@ -271,4 +271,4 @@ ZNS+ 接口支持 zone内部压缩(IZC) 和 稀疏顺序覆写
 
 ### 可能的改进
 
-
+thread logging 具有一些缺点，例如cold data移动的问题和pre-valid block的问题，或许可以针对这些缺点进行改进
