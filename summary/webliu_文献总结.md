@@ -1,15 +1,15 @@
 # 阅读记录
 
-ZNS: Avoiding the Block Interface Tax for Flash-based SSDs
+## ZNS: Avoiding the Block Interface Tax for Flash-based SSDs
 
-## 背景
+### 背景
 
 传统接口的一些特性：
 
 1. 传统的SSD和主机软件的功能划分:![img](https://img2023.cnblogs.com/blog/3067108/202306/3067108-20230611130607424-554407542.png)其中SSD的FTL层(Flash Translation Layer，闪存翻译层)需要有映射和垃圾回收机制且SSD要有一定的预留空间
 2. 块接口和当前存储设备特性(闪存颗粒)之间存在明显的不匹配，这种不匹配主要体现在我们可以将块写入闪存(接口决定的)但在擦除时必须以更大的粒度擦除闪存(闪存颗粒的性质决定的)。传统SSD使用块接口，导致其要想减少垃圾回收相应的主机软件会较为复杂，用于页面映射的DRAM较大，预留空间也较大(为了减少垃圾回收)，且仍然可能导致吞吐量限制 [17]、写入放大 [3]、性能不可预测性 [33， 64] 和高尾延迟 [16]
 
-### SSD
+#### SSD
 
 [SSD特性的来源](https://www.tonguebusy.com/a/peixun/xinxi/03-we-q-w-06.html)
 
@@ -37,7 +37,7 @@ Stream SSD将传入数据分到不同的擦除块，从而提升整体的性能�
 > ![img](https://img2023.cnblogs.com/blog/3067108/202306/3067108-20230612192513146-825310759.png)
 > OCSSD向主机公开了物理块，消除了设备内垃圾收集开销，并降低了OP和 DRAM 的成本。主机需要决定把数据放到哪个物理块，如何回收块，遇到介质故障时如何解决（而这些问题都和硬件特性有关）。这就相当于没有接口，物理资源直接暴露出来，软件可能需要频繁更新(不再模块化，硬件改变软件就要改变)
 
-### ZNS
+#### ZNS
 
 一些ZNS相关知识：
 
@@ -52,7 +52,7 @@ ZNS可以按需要限制active zone的数量
 ![img](https://img2023.cnblogs.com/blog/3067108/202306/3067108-20230612195322840-1023506186.png)
 最大活动区域的限制是基于SSD的介质特性(program disturb)
 
-## 方法设计
+### 方法设计
 
 ![img](https://img2023.cnblogs.com/blog/3067108/202306/3067108-20230614235935801-658670902.png)
 
@@ -66,7 +66,7 @@ ZNS接口的做法：
 将 FTL 职责转移给主机的效率不如与存储软件的数据映射和放置逻辑集成（集成到f2fs或者ZenFS）
 这一工作基于引入 Linux 内核、fio 基准测试工具、f2fs 文件系统和 RocksDB 键值存储对的 ZNS SSD 的支持 （这些工作已经开源）
 
-### Hardware
+#### Hardware
 
 ZNS 的FTL层的一些改变
 
@@ -81,7 +81,7 @@ ZNS 的FTL层的一些改变
 
 zone设置过大可能会导致擦除时出现写放大，如果设置得过小会导致I/O队列过深 (最小不能小于设备提供可靠性支持的最小单元)
 
-### Software
+#### Software
 
 有三种方式可以使主机软件适配ZNS 接口
 
@@ -105,7 +105,7 @@ ZenFS的架构则是全新的
 
 ![img](https://img2023.cnblogs.com/blog/3067108/202306/3067108-20230613003640076-477714461.png)
 
-#### linux
+##### linux
 
 为Linux 内核设计了Zoned Block Device子系统，来为各种ZNS类设备提供新的接口
 
@@ -115,7 +115,7 @@ ZBD提供了内核内 API 和基于 ioctl 的用户空间 API，来支持设备�
 
 在内核内维护一组有关各个zone的信息，他们由主机维护，当出错时则从特定的磁盘中刷新。
 
-#### fio 和 f2fs
+##### fio 和 f2fs
 
 fio和f2fs需要加以更改来识别zone描述表
 
@@ -128,7 +128,7 @@ fio和f2fs需要加以更改来识别zone描述表
     * fio不做修改，需要用户去遵守活动区域限制，否则就会出现 I/O 错误
     * f2fs限制可以同时打开的段数为6，但可以减少它来与活动区域限制保持一致。这需要修改 f2fs-tools 来检查区域活动限制。f2fs的元数据是要保存在块设备上的，作者没有直接解决这一问题，而是暴露一部分ZNS SSD的容量作为块设备
 
-#### RocksDB 与 ZenFS
+##### RocksDB 与 ZenFS
 
 调整常用的键值数据库 RocksDB，以使用 ZenFS 存储后端在分区存储设备上实现端到端数据放置。
 
@@ -185,7 +185,7 @@ ZenFS 定义了两种类型的区域：日志区域和数据区域。
 
 * 直接 I/O 和缓冲写入。ZenFS 利用对 SST 文件的写入是顺序且不可变的，对 SST 文件绕过内核页面缓存，执行直接 I/O 写入。对于其他文件（如 WAL），ZenFS 把写入暂存到内存，在刷新内存时才填充到磁盘中。
 
-## 效果
+### 效果
 
 实验效果建立在顺序写的限制上
 
@@ -202,4 +202,73 @@ overwrite测试ZenFS的优化效果明显(183%)，因为overwrite需要较多的
 
 相交7%OP的stream SSD，ZenFS的性能依旧更优
 
-## 可能的改进
+### 可能的改进
+
+## ZNS+: Advanced Zoned Namespace Interface for Supporting In-Storage Zone Compaction
+
+### 背景
+
+尽管LFS具有顺序追加的特性，但因为日志文件系统需要不断地将日志文件的段合并，这意味着大量的拷贝操作，这是相较传统文件系统要多承担的开销。
+而ZNS必须和LFS搭配使用(基于顺序写限制)，所以主机需要承担LFS的段压缩开销。
+需要研究一种面向ZNS的LFS系统。
+
+> log-on-log problem
+> Our work investigates the impacts to performance and endurance in flash when multiple layers of log-structured applications and file systems are layered on top of a log-structured flash device. We show that multiple log layers affects sequentiality and increases write pressure to flash devices through randomization of workloads, unaligned segment sizes, and uncoordinated multi-log garbage collection.
+
+要想利用SSD的闪存芯片并行性需要增大zone的大小（因为每个zone是隔离的，如果zone只包含一个channels，那么对zone的写入就没有并行性了），而zone越大段越大，压缩代价就越大
+
+SSD中：channels(并行闪存控制器) > flash chips > erase block > page > typical logical block size(4KB)
+
+映射到page上的一段连续的logical block称为chunk
+zone中的并行闪存芯片的数目称为$D_zone$
+分别位于不同闪存芯片上的逻辑连续的若干chunk称为条带$stripe$
+
+![img](https://img2023.cnblogs.com/blog/3067108/202403/3067108-20240311165400258-709078669.png)
+一个zone包含一个或多个FBG(flash block group),一个FBG要实现并行需要包含多个来自不同并行闪存芯片的擦除块（通常FBG包含不同闪存芯片上块偏移相同的块），而一个条带上包含多个chunk(通常条带包含来自不同擦除块的page偏移相同的chunk)
+
+chunk是copyback操作的基本单位，而同一flash chip内的chunk的copyback操作开销会得到优化
+
+F2FS有6种段(hot、warm、cold 的 node 和 data)每种段同时至多打开一个。
+node块包含一个data块的索引，data块则包含目录或用户文件数据。
+hot或warm段中的cold块在段压缩过程中会被转移到cold段。
+F2FS同时支持append logging和thread logging
+
+⚠️thread logging比直接的段压缩性能更好：虽然要拷贝的块数是一样的(internal plugging)，但internal plugging可以在闪存芯片闲置时在后台进行，且要修改的元数据更少。
+但同时thread logging也有一些缺点：thread logging写只能在与要写的数据具有相同类型的脏段上写(否则就会出现不同类型的数据混合在某个段的情况)，但段压缩则可以从所有脏段中找到有效块最少的段。其次，thread logging没办法把cold data移动到cold segement中，这样段中cold data每次参与到internal plugging中。
+其次thread logging的回收不方便，当文件系统回收某一个chunk时，可能并不会写入checkpoint，这样在thread logging眼中该chunk仍是有效的，依旧会参与到internal plugging中。
+
+### 方法设计
+
+ZNS+ 接口支持 zone内部压缩(IZC) 和 稀疏顺序覆写
+
+* IZC：
+  * 压缩操作可以细分为四个subtask: 👉 待压缩段选择，分配块保存结果、数据拷贝、元数据更新。其中数据拷贝的工作可以交给SSD而不是主机
+  ![img](https://img2023.cnblogs.com/blog/3067108/202403/3067108-20240311190218301-501952618.png)
+  * 在发送读磁盘请求之前必须分配内存页，这可能会导致page frame回收。同时因为LBA在磁盘上大概率是不连续的，需要依次发送多个读请求（尽管它们可能在同一个闪存芯片上），没法综合所有的读请求来利用闪存芯片的并行性。（例如在图a中每次请求可以并行地读两个闪存芯片，但闪存芯片0在第一次读请求到第四次读请求之间依旧有idle）
+  * 而写阶段需要所有读请求都完成才会开始，这样当一个读请求完成后，在内存中的数据不会立刻写入到磁盘中，这段时间SSD也是idle的
+  * 而IZC不需要将数据从磁盘拷贝到内存中，同时会更有效率地安排读写操作(利用并行性和copyback操作)，zone_compaction请求是异步的且会重排读写请求
+* 稀疏顺序覆写：
+  * 有一种名为 threaded logging的回收机制，该机制通过随机产生覆写操作，向脏段的无效空间中写新数据，来代替传统的段回收。但ZNS要求顺序写，所以不能直接通过该机制减少压缩开销。ZNS+选择松弛顺序写的限制，引入稀疏顺序覆写，threaded logging的稀疏顺序覆写在ZNS+中是被允许的，我们可以在覆写请求之间插入有效区域的顺序写，将稀疏顺序写转化真正的顺序写。
+  * thread logging的覆写可以很容易与正常的写指令区分开来，因为覆写的LBA将会位于WA之前。收到覆写指令后需要对要跳过的有效块进行判断，为了减少这部分延迟，引入tl_open指令来提前创建闪存芯片中的有效块的位图。
+  * F2FS的threaded logging并不直接写入原来的FBG，而是分配一个新的LogFBG，在LogFBG上进行threaded logging写，而且有效块可以用copyback操作来拷贝。
+    ![img](https://img2023.cnblogs.com/blog/3067108/202403/3067108-20240311221120609-918088273.png)
+    完成一次threaded logging写之后，如果后面还有有效块，可以顺次将其也拷贝到Log FBG
+    中，这样可以提前将WP移动到合适的位置
+    如果一个并行闪存芯片上的低地址有效块都被拷贝了，而高地址块有效的话，可以顺次将其拷贝到Log FBG中，因为这满足每个闪存芯片上的顺序写要求，同样可以为WP的移动做准备（例如当WP还在chunk1时，就可以将chunk3的内容拷贝到Log FBG中了）
+
+文件系统引入两项技术来与ZNS配合
+
+* 回写感知的块分配：
+    回拷操作用于在同一闪存plane内的闪存页面之间复制数据，而无需进行片外数据传输，已经应用到了标准NAND接口中。新的文件系统在块分配时采用放置策略来利用回拷操作(将copy的源逻辑块和目的逻辑块映射到同一个闪存芯片上)
+    ![img](https://img2023.cnblogs.com/blog/3067108/202403/3067108-20240311223728440-75688065.png)
+    核心就是在目标段所在的FBG中分配恰好能填满的空间（一般情况下），之后先尽可能地对chunk进行copyback（chip ID可以在map机制中可以很容易地得到），之后用read&write指令将剩下的块填到分配的空间中去
+* 混合段压缩方式：使文件系统能够分析开销判断该采用IZC还是稀疏顺序覆写来回收段
+    为了减少pre-valid 块，引入周期性设置checkpoint的机制，当pre-valid块的数目大于与之 $θ_{PI}$ 时对元数据进行更新
+    引入回收代价计算模型，对开销进行分析
+
+### 效果
+
+
+### 可能的改进
+
+
