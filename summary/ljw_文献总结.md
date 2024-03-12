@@ -10,6 +10,8 @@ ZNS zone的状态转换图如下所示。相对应的ZNS提供的区域管理命
 
 ![ZONE 状态转换][cl23-1]
 
+![ZONE 状态转换](https://github.com/ljwhust/pictures/blob/main/ZNS/CLUSTER%2023'/ZNS%20zone%E7%8A%B6%E6%80%81%E8%BD%AC%E6%8D%A2.jpg)
+
 使用linux kernel block layer(with io_uring) 和 用户端的SPDK 共同测试ZNS的性能。因为fio和linux block layer不支持append和区域管理相关操作；SPDK只是用户端框架，不支持IO调度，因此一次只能发出一个write请求(linux block layer的IO调度采用mq-deadline调度，将application对同一区域的多个连续的LBA write合并为一个较大的写)。
 
 评价变量：throughput (the number of operations or bytes per second) 和 operation latency (the time each operation takes)
