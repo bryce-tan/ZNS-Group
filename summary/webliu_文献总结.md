@@ -209,11 +209,14 @@ overwrite测试ZenFS的优化效果明显(183%)，因为overwrite需要较多的
 ### 背景
 
 尽管LFS具有顺序追加的特性，但因为日志文件系统需要不断地将日志文件的段合并，这意味着大量的拷贝操作，这是相较传统文件系统要多承担的开销。
-而ZNS必须和LFS搭配使用(基于顺序写限制)，所以主机需要承担LFS的段压缩开销。
+而ZNS必须和LFS搭配使用(基于顺序写限制)，所以主机需要承担LFS的段压缩开销（本应由SSD的垃圾回收机制代为承担）。
 需要研究一种面向ZNS的LFS系统。
 
 > log-on-log problem
 > Our work investigates the impacts to performance and endurance in flash when multiple layers of log-structured applications and file systems are layered on top of a log-structured flash device. We show that multiple log layers affects sequentiality and increases write pressure to flash devices through randomization of workloads, unaligned segment sizes, and uncoordinated multi-log garbage collection.
+
+在传统的SSD的应用LFS文件系统就是一个log-on-log问题。因为SSD也按照先写再垃圾回收的方式运行，所以也是一个log系统。上层LFS文件系统的段压缩（垃圾回收）对于SSD来说只是正常的写操作，进一步引发下层的垃圾回收，总的写放大倍率将会是上层的写放大倍率乘上下层的写放大倍率。
+而ZNS SSD则没有垃圾回收机制，避免了写放大。
 
 要想利用SSD的闪存芯片并行性需要增大zone的大小（因为每个zone是隔离的，如果zone只包含一个channels，那么对zone的写入就没有并行性了），而zone越大段越大，压缩代价就越大
 
@@ -272,3 +275,19 @@ ZNS+ 接口支持 zone内部压缩(IZC) 和 稀疏顺序覆写
 ### 可能的改进
 
 thread logging 具有一些缺点，例如cold data移动的问题和pre-valid block的问题，或许可以针对这些缺点进行改进
+
+## eZNS: An Elastic Zoned Namespace for Commodity ZNS SSDs
+
+### 背景
+
+
+
+### 方法设计
+
+zone管理器：管理zone分配和活动资源
+
+分层I/O调度器：读拥塞控制、写权限控制
+
+### 效果
+
+### 可能的改进
