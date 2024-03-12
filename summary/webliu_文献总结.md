@@ -223,7 +223,7 @@ overwrite测试ZenFS的优化效果明显(183%)，因为overwrite需要较多的
 SSD中：channels(并行闪存控制器) > flash chips > erase block > page > typical logical block size(4KB)
 
 映射到page上的一段连续的logical block称为chunk
-zone中的并行闪存芯片的数目称为$D_zone$
+zone中的并行闪存芯片的数目称为$D_{zone}$
 分别位于不同闪存芯片上的逻辑连续的若干chunk称为条带$stripe$
 
 ![img](https://img2023.cnblogs.com/blog/3067108/202403/3067108-20240311165400258-709078669.png)
