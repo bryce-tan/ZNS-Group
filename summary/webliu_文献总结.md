@@ -291,3 +291,17 @@ zone管理器：管理zone分配和活动资源
 ### 效果
 
 ### 可能的改进
+
+
+## Separating Data via Block Invalidation Time Inference for Write Amplification Reduction in Log-Structured Storage
+
+### 背景
+
+
+### 方法设计
+
+
+### 效果
+
+
+### 可能的改进
