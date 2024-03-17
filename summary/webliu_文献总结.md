@@ -212,6 +212,9 @@ overwrite测试ZenFS的优化效果明显(183%)，因为overwrite需要较多的
 而ZNS必须和LFS搭配使用(基于顺序写限制)，所以主机需要承担LFS的段压缩开销（本应由SSD的垃圾回收机制代为承担）。
 需要研究一种面向ZNS的LFS系统。
 
+srds 传统的SSD也是一种顺序写友好的硬件，传统SSD+F2FS的搭配并不uncommon
+这是因为SSD的擦除粒度大于写的粒度，覆写操作实际上是out-of-place manner的，即先追加写新的数据，然后将旧的数据标记为invalid。所以说本质上是顺序写友好的
+
 > log-on-log problem
 > Our work investigates the impacts to performance and endurance in flash when multiple layers of log-structured applications and file systems are layered on top of a log-structured flash device. We show that multiple log layers affects sequentiality and increases write pressure to flash devices through randomization of workloads, unaligned segment sizes, and uncoordinated multi-log garbage collection.
 
@@ -297,7 +300,25 @@ zone管理器：管理zone分配和活动资源
 
 ### 背景
 
+为什么要坚持使用Log-structured 存储
+![img](https://img2023.cnblogs.com/blog/3067108/202403/3067108-20240316151233544-916223759.png)
 
+BIT是block invalidation time的缩写
+SepBIT是一种新算法，它根据存储负载推断BIT，并将具有相近BIT的块放到一组，进而减少写放大
+这种推断基于实际存储负载的写入倾斜特征(基于对阿里云和腾讯云的分析)
+
+现有的块放置算法基于块温度(写/修改 频率)来分组
+
+当一个段被写满之后，称之为sealed segment，反之为open segment，open segment不需要垃圾回收，只需要接着追加写即可。
+常见的垃圾回收目标段选择策略有：Greedy  👉 回收invalid块占比最高的若干sealed segment、 Cost-Benefit 👉 选择  垃圾占比GP * 段满之后经过的时间/ (1 - GP) 值最高的若干段，该策略可能考虑到，段满的时间越久里面的valid块越有可能不会被用到？？？ 是这样吗
+
+块的lifespan被定义为从该块开始被写到它被无效化的这段时间总负载的写入字节数
+
+有以下三个发现：
+
+* User-write 块通常有较短的lifespan，更准确地说其life通常小于卷的总容量
+  ![img](https://img2023.cnblogs.com/blog/3067108/202403/3067108-20240316195240339-1929694785.png)
+* 
 ### 方法设计
 
 
