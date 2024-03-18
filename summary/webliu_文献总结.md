@@ -303,7 +303,7 @@ zone管理器：管理zone分配和活动资源
 为什么要坚持使用Log-structured 存储
 ![img](https://img2023.cnblogs.com/blog/3067108/202403/3067108-20240316151233544-916223759.png)
 
-BIT是block invalidation time的缩写
+BIT是block invalidation time的缩写，这里的时间是用写入量来标识的
 SepBIT是一种新算法，它根据存储负载推断BIT，并将具有相近BIT的块放到一组，进而减少写放大
 这种推断基于实际存储负载的写入倾斜特征(基于对阿里云和腾讯云的分析)
 
@@ -313,12 +313,12 @@ SepBIT是一种新算法，它根据存储负载推断BIT，并将具有相近BI
 常见的垃圾回收目标段选择策略有：Greedy  👉 回收invalid块占比最高的若干sealed segment、 Cost-Benefit 👉 选择  垃圾占比GP * 段满之后经过的时间/ (1 - GP) 值最高的若干段，该策略可能考虑到，段满的时间越久里面的valid块越有可能不会被用到？？？ 是这样吗
 
 块的lifespan被定义为从该块开始被写到它被无效化的这段时间总负载的写入字节数
-卷的write working set (WSS)即为对该卷的写操作的总字节数
+卷的write working set (WSS)即为对该卷的写操作的总字节数(更新操作不是unique LBA 不算在内)
 
 有以下三个发现：
 以下发现都是对每个卷单独进行分析得到的，且累加占比是满足条件的卷占所有卷的比例
 
-* User-write 块通常有较短的lifespan，更准确地说其lifespan通常小于卷的总容量
+* User-write 块通常有较短的lifespan，更准确地说其lifespan通常小于该卷的总写字节数
   ![img](https://img2023.cnblogs.com/blog/3067108/202403/3067108-20240316195240339-1929694785.png)
   例如，半数卷有超过 79.5% 的用户写入块的生命期小于其写入 WSS 的 80%，有超过 47.6% 的用户写入块的生命期仅小于写入 WSS 的 10%。（横轴是统计进去的所有卷中满足条件的用户写入块占比的最小值？？？？）
   而GC回收块的lifespan一般较长，因为GC回收块写入的数据是GC回收段中有效块的数据。
@@ -337,6 +337,28 @@ SepBIT是一种新算法，它根据存储负载推断BIT，并将具有相近BI
   在 25% 的数据卷中，71.5% 以上很少更新的数据块的寿命小于 0.5 倍写入 WSS。其余四组的百分比中值分别为 24.9%、8.1%、3.3% 和 2.2%。 ？？？
   这意味着不经常修改的块的lifespan既有长的也有短的
   这同样说明了根据块温度来放置数据的策略并不合适。
+
+### 方法设计
+
+![img](https://img2023.cnblogs.com/blog/3067108/202403/3067108-20240317191541607-147402803.png)
+根据发现1，分为user-write block和GC block 
+根据发现2，推断BIT将不同lifespan的数据放到不同的class里面
+
+如何推断lifespan
+![img](https://img2023.cnblogs.com/blog/3067108/202403/3067108-20240318154732055-120344455.png)
+
+对于user-written 块：
+如果写的数据是全新的，那么该user-written块的estimated lifespan为 $\infty$
+如果是对原先数据的更新，那么写入的user-written块的estimated lifespan为原先数据所在块的lifespan
+直觉是：某块的数据是对旧的short-lived数据的更新，那么该块也很可能是short-lived的
+证明：基于访问特征倾斜的假设(即对块的访问是不均匀的)，用Zipf分布对块的访问概率进行建模。该分布的特征是，概率与它在排序中的位置成反比关系，换句话说，访问概率第二高的块大约是概率最高的块的一半，概率第三高的块大约是概率最高的单词的三分之一，以此类推。$p_i=\left(1 / i^\alpha\right) / \sum_{j=1}^n\left(1 / j^\alpha\right) \qquad 1 \le i \le n \quad \alpha \ge 0, \quad \alpha 越大，说明分布越倾斜$
+
+对于GC-rewritten块：
+定义age为数据从被写到被会受到GC块中间中的workload的写入量
+定义residual lifespan为该数据从写到GC块到其最终无效的过程中的user-written的写入量
+那么这个数据中的lifespan应是age + residual lifespan
+直觉是 数据的age短，residual lifespan也就短
+证明：
 
 ### 效果
 
