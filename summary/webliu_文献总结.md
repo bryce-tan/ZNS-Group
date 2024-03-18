@@ -303,7 +303,14 @@ zone管理器：管理zone分配和活动资源
 为什么要坚持使用Log-structured 存储
 ![img](https://img2023.cnblogs.com/blog/3067108/202403/3067108-20240316151233544-916223759.png)
 
-BIT是block invalidation time的缩写，这里的时间是用写入量来标识的
+boxplot图（箱线图）是一种用于显示数据分布的常用统计图表。
+
+* 箱体（Box）：箱体代表了数据的中间50%（第二四分位数（Q2）），上下两边分别是第一四分位数（Q1）和第三四分位数（Q3）。箱体的长度代表了数据的分布范围。
+* 中位数（Median）：箱体内的中线代表数据的中位数，也就是第二四分位数（Q2）。
+* 上下边缘（Whiskers）：通常是从箱体延伸出来的线段，它们表示数据的范围。Whiskers的长度通常是箱体长度的1.5倍IQR（四分位数间距，即Q3-Q1）。
+* 异常值（Outliers）：箱线图中的个别点，它们超出了上下边缘的1.5倍IQR的范围。
+
+BIT是block invalidation time的缩写，这里的时间是用写入的块数为单位来标识的
 SepBIT是一种新算法，它根据存储负载推断BIT，并将具有相近BIT的块放到一组，进而减少写放大
 这种推断基于实际存储负载的写入倾斜特征(基于对阿里云和腾讯云的分析)
 
@@ -351,16 +358,55 @@ SepBIT是一种新算法，它根据存储负载推断BIT，并将具有相近BI
 如果写的数据是全新的，那么该user-written块的estimated lifespan为 $\infty$
 如果是对原先数据的更新，那么写入的user-written块的estimated lifespan为原先数据所在块的lifespan
 直觉是：某块的数据是对旧的short-lived数据的更新，那么该块也很可能是short-lived的
-证明：基于访问特征倾斜的假设(即对块的访问是不均匀的)，用Zipf分布对块的访问概率进行建模。该分布的特征是，概率与它在排序中的位置成反比关系，换句话说，访问概率第二高的块大约是概率最高的块的一半，概率第三高的块大约是概率最高的单词的三分之一，以此类推。$p_i=\left(1 / i^\alpha\right) / \sum_{j=1}^n\left(1 / j^\alpha\right) \qquad 1 \le i \le n \quad \alpha \ge 0, \quad \alpha 越大，说明分布越倾斜$
+证明：基于访问特征倾斜的假设(即对块的访问是不均匀的)，用Zipf分布对块的访问概率进行建模。该分布的特征是，概率与它在排序中的位置成反比关系，换句话说，访问概率第二高的块大约是概率最高的块的一半，概率第三高的块大约是概率最高的单词的三分之一，以此类推。$$p_i=\left(1 / i^\alpha\right) / \sum_{j=1}^n\left(1 / j^\alpha\right) \qquad 1 \le i \le n \quad \alpha \ge 0, \quad $$ 
+$\alpha$越大，说明分布越倾斜
+则 $1-p_i$ 就是第i块不被访问的概率，要想计算lifespan小于 $v_0$ 的概率，那么就要计算第一次写到第 $i$ 块且之后 $v_0$ 次写入至少有1次访问到第 $i$ 块，即 1 - 连续 $v_0$ 次都没有写入第 $i$ 块的概率， $1 - (1 - p_i)^{v_0}$，因为可能写到1到n中任意一块，lifespan小于 $v_0$ 的概率为一个累加，$\sum_{i=1}^{n} {上式}$ ，进而得到
+$$
+\begin{aligned}
+& \operatorname{Pr}\left(u \leq u_0 \mid v \leq v_0\right)=\frac{\operatorname{Pr}\left(u \leq u_0 \text { and } v \leq v_0\right)}{\operatorname{Pr}\left(v \leq v_0\right)} \\
+& =\frac{\sum_{i=1}^n\left(1-\left(1-p_i\right)^{u_0}\right) \cdot\left(1-\left(1-p_i\right)^{v_0}\right) \cdot p_i}{\sum_{i=1}^n\left(1-\left(1-p_i\right)^{v_0}\right) \cdot p_i} .
+\end{aligned}
+$$
+对该公式进行分析，得到v0越小，u < u0的条件概率越大。
+这一点很好理解，因为分布是倾斜的，v0越小说明该块越有可能是访问概率高的块，进而下次访问的间隔也会小。
+对Trace的统计也验证了理论分析。
 
 对于GC-rewritten块：
 定义age为数据从被写到被会受到GC块中间中的workload的写入量
 定义residual lifespan为该数据从写到GC块到其最终无效的过程中的user-written的写入量
-那么这个数据中的lifespan应是age + residual lifespan
+那么该数据中的lifespan应是age + residual lifespan
+SepBIT不直接分析GC-written块的lifespan，而是分析其前身user-written块的lifespan。当一个user-written块的lifespan超过某个阈值，就认为该块已经被回收到GC-written块了，对应数据的age就是这一阈值。(???为什么要这样认为)
 直觉是 数据的age短，residual lifespan也就短
-证明：
+证明：$g_0$是数据的age，也就是阈值，$r_0$是其residual lifespan，那么该数据的lifespan就是 $g_0 + r_0$
+和前面计算lifespan小于 $v_0$ 的方式类似，lifespan大于 $g_0$ 的前提下，小于 $g_0 + r_0$ 的条件概率为
+$$
+\begin{aligned}
+& \operatorname{Pr}\left(u \leq g_0+r_0 \mid u \geq g_0\right)=\frac{\operatorname{Pr}\left(g_0 \leq u \leq g_0+r_0\right)}{\operatorname{Pr}\left(u \geq g_0\right)} \\
+& =\frac{\sum_{i=1}^n p_i \cdot\left(\left(1-p_i\right)^{g_0}-\left(1-p_i\right)^{g_0+r_0}\right)}{\sum_{i=1}^n p_i \cdot\left(1-p_i\right)^{g_0}}
+\end{aligned}
+$$
+给定 $\alpha、r_0$， $g_0$ 越大，条件概率越小，也即 $g_0$ 越大，该数据的residual lifespan 小的概率越低。
+这点也很好理解，因为分布是倾斜的，上面说明了数据的lifespan与user-written写入的是哪一块有关，所以同一块中无效数据和有效数据的lifespan应该是相差不大的。而其中的有效数据正是GC-written块的数据来源。age反映了无效数据的lifespan，假设差别不大是指相差20%左右，那么显然age越大，20%对应的residual lifespan也就越大。
+对Trace的统计也验证了理论分析。
+
+代码实现：
+![img](https://img2023.cnblogs.com/blog/3067108/202403/3067108-20240318223303644-2146394193.png)
+$\mathcal{l}$ 为一个阈值，用于给数据按BIT进行分类，它通过计算最新被回收的段的平均lifespan得到。
+$\mathcal{t}$ 是user-write的时间戳，每次写操作增加1。
+
+数据结构：实现SepBIT只需要维护每块的last user write time，该值作为元数据保存在disk中。
+
+对于user-written块：为了正确放置，需要知道原块的lifespan，如果去读该块的disk显然是不划算的。但我们只要知道其lifespan是否小于 $\mathcal{l}$ 即可， 所以维护一个FIFO来记录最近的若干次写操作，该队列的长度稳定后应该要大于 $\mathcal{l}$ 。做法是对于要新写入的LBA，在FIFO中查找它，如果在队列中能找到它且其下标小于 $\mathcal{l}$，那么就说明原块的lifespan小于 $\mathcal{l}$ 。
+该队列的长度应该根据 $\mathcal{l}$ 动态调整。
+同时设置一个map，用来表示不同LBA在队列中的最新位置，这样可以加快判断，只需要在元素入队出队时更新map即可。
+
+对于GC-written块：因为GC块的写本来就需要读user-written块的有效数据，所以一并读metadata并不会增加多余的开销。
 
 ### 效果
 
+![img](https://img2023.cnblogs.com/blog/3067108/202403/3067108-20240318230310402-1329847947.png)
+80 % 优化效果蛮好，相关系数大于0.75
+
+对于GC很少的卷，SepBIT由于要维护FIFO，吞吐量相较别的放置策略损失了3.0% ~ 6.9%
 
 ### 可能的改进
