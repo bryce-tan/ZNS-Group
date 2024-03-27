@@ -7,23 +7,25 @@
 传统接口的一些特性：
 
 1. 传统的SSD和主机软件的功能划分:![img](https://img2023.cnblogs.com/blog/3067108/202306/3067108-20230611130607424-554407542.png)其中SSD的FTL层(Flash Translation Layer，闪存翻译层)需要有映射和垃圾回收机制且SSD要有一定的预留空间
-2. 块接口和当前存储设备特性(闪存颗粒)之间存在明显的不匹配，这种不匹配主要体现在我们可以将块写入闪存(接口决定的)但在擦除时必须以更大的粒度擦除闪存(闪存颗粒的性质决定的)。传统SSD使用块接口，导致其要想减少垃圾回收相应的主机软件会较为复杂，用于页面映射的DRAM较大，预留空间也较大(为了减少垃圾回收)，且仍然可能导致吞吐量限制 [17]、写入放大 [3]、性能不可预测性 [33， 64] 和高尾延迟 [16]
+2. 块接口和当前存储设备特性(闪存颗粒)之间存在明显的不匹配，这种不匹配主要体现在我们可以将块写入闪存(接口决定的)但在擦除时必须以更大的粒度擦除闪存(闪存颗粒的性质决定的)。传统SSD使用块接口，导致其要想减少垃圾回收相应的主机软件会较为复杂，用于页面映射的DRAM较大，预留空间也较大(为了减少垃圾回收)，且仍然可能导致吞吐量限制 [17]、写入放大 [3]、性能不可预测性和高尾延迟(后台的GC导致)
 
 #### SSD
 
 [SSD特性的来源](https://www.tonguebusy.com/a/peixun/xinxi/03-we-q-w-06.html)
 
+SSD中：channels(并行闪存控制器) > flash chips > flash die > flash plane > erase block > page > typical logical block size(4KB)
+![img](https://img2023.cnblogs.com/blog/3067108/202403/3067108-20240323143709800-1272721894.png)
+![img](https://img2023.cnblogs.com/blog/3067108/202403/3067108-20240323143716508-892223598.png)
+
 * 逻辑块的大小一般是一页，一个擦除块可能包含多个页![img](https://img2023.cnblogs.com/blog/3067108/202306/3067108-20230611134729590-1304353693.png)![img](https://img2023.cnblogs.com/blog/3067108/202306/3067108-20230611142220405-1672501370.png)
-* ![img](https://img2023.cnblogs.com/blog/3067108/202306/3067108-20230614175145312-805185323.png)
 
 为了给基于闪存的设备一个块接口，我们需要FTL层来让设备支持随机"覆写"，映射，垃圾回收，均匀使用闪存
 
 一些缺点：
 > 闪存颗粒不支持"覆写"，它只能将数据擦除后重新写，所以逻辑块的写入实际上是写入到一个没有数据的地方，且需要旧的不会用到的数据所在的擦除块被擦除来腾出空间。当擦除块中有的数据用不到了，有的数据还需要使用，那么我们得将需要使用的数据转移到其他擦除块中，把其他擦除块中要擦除的数据转移到那个将要擦除的块统一擦除，为此我们需要预留一部分空间(7%或28%)来方便转移数据。![img](https://img2023.cnblogs.com/blog/3067108/202306/3067108-20230611142321342-1853616515.png)
-> 首先谁也不能保证某些数据将来一定用不到了，垃圾回收机制只能按照某种标准来决定回收哪些数据，这会带来操作性能的不确定性
-> 其次剩余容量越小，垃圾回收就会越频繁，而垃圾回收需要转移数据和初始化擦除块，这会带来一定的写放大
-> 再次SSD的使用寿命等同于Block的擦写次数，为了提升总体寿命，SSD的主控芯片会尽可能的让每个Block的擦写次数均匀。这就需要擦写特定的块，也会导致一定的写放大。
-> 再再次由于逻辑块的粒度较小，为了支持映射需要较大的DRAM来保存页表
+> 剩余容量越小，垃圾回收就会越频繁，而垃圾回收需要转移数据和初始化擦除块，这会带来一定的写放大
+> 其次SSD的使用寿命等同于Block的擦写次数，为了提升总体寿命，SSD的主控芯片会尽可能的让每个Block的擦写次数均匀。这就需要擦写特定的块，也会导致一定的写放大。
+> 再次由于逻辑块的粒度较小，为了支持映射需要较大的DRAM来保存页表
 > 最后是预留空间的代价，它不能用来存数据
 
 现有的两种改进措施
@@ -61,7 +63,9 @@ ZNS接口的做法：
 新的责任划分、新的粒度
 
 * 暴露出闪存擦除块边界和写入顺序规则(flash erase block boundaries and write-ordering rules),要求主机软件以擦除块为粒度解决数据管理的问题(不支持随机写，同时主机软件来负责显式擦除)从而不再要求SSD提供垃圾回收机制和预留空间
-* 同时降低DRAM需求(传统的FTL闪存转换层需要1GB的DRAM才能映射1TB的NAND闪存，这是因为粒度为4Kb，ZNS每个区域数百M,当然相应的映射所需的数据量也会多一些，ZNS不是逻辑块的一维数组，而是将多个逻辑块分为一个区域(zone)，zone和物理块是对齐的，区域中的逻辑块可以随机读但必须顺序写，且只允许擦除写)，但SSD仍负责管理SSD内的介质可靠性( media reliability)
+* 同时降低DRAM需求(传统的FTL闪存转换层需要1GB的DRAM才能映射1TB的NAND闪存，这是因为粒度为4Kb，ZNS每个区域数百M,当然相应的映射所需的数据量也会多一些，ZNS不是逻辑块的一维数组，而是将多个逻辑块分为一个区域(zone)，zone和物理块是对齐的，区域中的逻辑块可以随机读但必须顺序写，且只允许擦除写)，但SSD仍负责管理SSD内的介质可靠性( media reliability)，顺序写要求是因为只维护了到逻辑zone到物理zone的映射。
+* 在分区之后，降低了多用户的工作流之间的干扰（防止不同租户对channel或die的带宽进行竞争）
+![img](https://img2023.cnblogs.com/blog/3067108/202403/3067108-20240323144528304-1176558776.png)
 
 将 FTL 职责转移给主机的效率不如与存储软件的数据映射和放置逻辑集成（集成到f2fs或者ZenFS）
 这一工作基于引入 Linux 内核、fio 基准测试工具、f2fs 文件系统和 RocksDB 键值存储对的 ZNS SSD 的支持 （这些工作已经开源）
@@ -223,8 +227,6 @@ srds 传统的SSD也是一种顺序写友好的硬件，传统SSD+F2FS的搭配�
 
 要想利用SSD的闪存芯片并行性需要增大zone的大小（因为每个zone是隔离的，如果zone只包含一个channels，那么对zone的写入就没有并行性了），而zone越大段越大，压缩代价就越大
 
-SSD中：channels(并行闪存控制器) > flash chips > erase block > page > typical logical block size(4KB)
-
 映射到page上的一段连续的logical block称为chunk
 zone中的并行闪存芯片的数目称为$D_{zone}$
 分别位于不同闪存芯片上的逻辑连续的若干chunk称为条带$stripe$
@@ -232,7 +234,7 @@ zone中的并行闪存芯片的数目称为$D_{zone}$
 ![img](https://img2023.cnblogs.com/blog/3067108/202403/3067108-20240311165400258-709078669.png)
 一个zone包含一个或多个FBG(flash block group),一个FBG要实现并行需要包含多个来自不同并行闪存芯片的擦除块（通常FBG包含不同闪存芯片上块偏移相同的块），而一个条带上包含多个chunk(通常条带包含来自不同擦除块的page偏移相同的chunk)
 
-chunk是copyback操作的基本单位，而同一flash chip内的chunk的copyback操作开销会得到优化
+chunk是copyback操作的基本单位，而同一flash plane内的chunk的copyback操作开销会得到优化
 
 F2FS有6种段(hot、warm、cold 的 node 和 data)每种段同时至多打开一个。
 node块包含一个data块的索引，data块则包含目录或用户文件数据。
@@ -240,7 +242,7 @@ hot或warm段中的cold块在段压缩过程中会被转移到cold段。
 F2FS同时支持append logging和thread logging
 
 ⚠️thread logging比直接的段压缩性能更好：虽然要拷贝的块数是一样的(internal plugging)，但internal plugging可以在闪存芯片闲置时在后台进行，且要修改的元数据更少。
-但同时thread logging也有一些缺点：thread logging写只能在与要写的数据具有相同类型的脏段上写(否则就会出现不同类型的数据混合在某个段的情况)，但段压缩则可以从所有脏段中找到有效块最少的段。其次，thread logging没办法把cold data移动到cold segement中，这样段中cold data每次参与到internal plugging中。
+但同时thread logging也有一些缺点：thread logging写只能在与要写的数据具有相同类型的脏段上写(否则就会出现不同类型的数据混合在某个段的情况)，但段压缩则可以从所有脏段中找到有效块最少的段。其次，thread logging没办法把cold data移动到cold segement中，这样段中cold data每次参与到internal plugging中。(段压缩的结果段可以是多个不同类型的段)
 其次thread logging的回收不方便，当文件系统回收某一个chunk时，可能并不会写入checkpoint，这样在thread logging眼中该chunk仍是有效的，依旧会参与到internal plugging中。
 
 ### 方法设计
@@ -252,11 +254,12 @@ ZNS+ 接口支持 zone内部压缩(IZC) 和 稀疏顺序覆写
   ![img](https://img2023.cnblogs.com/blog/3067108/202403/3067108-20240311190218301-501952618.png)
   * 在发送读磁盘请求之前必须分配内存页，这可能会导致page frame回收。同时因为LBA在磁盘上大概率是不连续的，需要依次发送多个读请求（尽管它们可能在同一个闪存芯片上），没法综合所有的读请求来利用闪存芯片的并行性。（例如在图a中每次请求可以并行地读两个闪存芯片，但闪存芯片0在第一次读请求到第四次读请求之间依旧有idle）
   * 而写阶段需要所有读请求都完成才会开始，这样当一个读请求完成后，在内存中的数据不会立刻写入到磁盘中，这段时间SSD也是idle的
-  * 而IZC不需要将数据从磁盘拷贝到内存中，同时会更有效率地安排读写操作(利用并行性和copyback操作)，zone_compaction请求是异步的且会重排读写请求
+  * 而IZC不需要将数据从磁盘拷贝到内存中，同时会更有效率地安排读写操作(利用并行性和copyback操作)
+  * zone_compaction请求是异步的(与传统SSD自动进行GC相比，ZNS的GC是主机端用zone_compaction指令显式指定的，那么该指令执行的时机就有了自由，这一设计可以减少尾延迟)
 * 稀疏顺序覆写：
   * 有一种名为 threaded logging的回收机制，该机制通过随机产生覆写操作，向脏段的无效空间中写新数据，来代替传统的段回收。但ZNS要求顺序写，所以不能直接通过该机制减少压缩开销。ZNS+选择松弛顺序写的限制，引入稀疏顺序覆写，threaded logging的稀疏顺序覆写在ZNS+中是被允许的，我们可以在覆写请求之间插入有效区域的顺序写，将稀疏顺序写转化真正的顺序写。
   * thread logging的覆写可以很容易与正常的写指令区分开来，因为覆写的LBA将会位于WA之前。收到覆写指令后需要对要跳过的有效块进行判断，为了减少这部分延迟，引入tl_open指令来提前创建闪存芯片中的有效块的位图。
-  * F2FS的threaded logging并不直接写入原来的FBG，而是分配一个新的LogFBG，在LogFBG上进行threaded logging写，而且有效块可以用copyback操作来拷贝。
+  * F2FS的threaded logging并不直接写入原来的FBG(因为SSD必须先擦除才能写入)，而是分配一个新的LogFBG，在LogFBG上进行threaded logging写，而且有效块可以用copyback操作来拷贝。
     ![img](https://img2023.cnblogs.com/blog/3067108/202403/3067108-20240311221120609-918088273.png)
     完成一次threaded logging写之后，如果后面还有有效块，可以顺次将其也拷贝到Log FBG
     中，这样可以提前将WP移动到合适的位置
@@ -317,7 +320,11 @@ SepBIT是一种新算法，它根据存储负载推断BIT，并将具有相近BI
 现有的块放置算法基于块温度(写/修改 频率)来分组
 
 当一个段被写满之后，称之为sealed segment，反之为open segment，open segment不需要垃圾回收，只需要接着追加写即可。
-常见的垃圾回收目标段选择策略有：Greedy  👉 回收invalid块占比最高的若干sealed segment、 Cost-Benefit 👉 选择  垃圾占比GP * 段满之后经过的时间/ (1 - GP) 值最高的若干段，该策略可能考虑到，段满的时间越久里面的valid块越有可能不会被用到？？？ 是这样吗
+
+常见的垃圾回收目标段选择策略有：
+
+* Greedy  👉 回收invalid块占比最高的若干sealed segment（可能会选择包含热数据的段，热数据本来不需要copy因为他们很快就会失效）
+* Cost-Benefit 👉 选择  垃圾占比GP * 段满之后经过的时间/ (1 - GP) 值最高的若干段。该策略可能考虑到，段满的时间太短hot block还来不及失效需要再等等，尽管该算法较复杂，但一般而言CB的效果是最好的。
 
 块的lifespan被定义为从该块开始被写到它被无效化的这段时间总负载的写入字节数
 卷的write working set (WSS)即为对该卷的写操作的总字节数(更新操作不是unique LBA 不算在内)
@@ -372,7 +379,7 @@ $$
 对Trace的统计也验证了理论分析。
 
 对于GC-rewritten块：
-定义age为数据从被写到被会受到GC块中间中的workload的写入量
+定义age为数据从被写到被回收至GC块这中间的workload的写入量
 定义residual lifespan为该数据从写到GC块到其最终无效的过程中的user-written的写入量
 那么该数据中的lifespan应是age + residual lifespan
 SepBIT不直接分析GC-written块的lifespan，而是分析其前身user-written块的lifespan。当一个user-written块的lifespan超过某个阈值，就认为该块已经被回收到GC-written块了，对应数据的age就是这一阈值。(???为什么要这样认为)
@@ -408,5 +415,88 @@ $\mathcal{t}$ 是user-write的时间戳，每次写操作增加1。
 80 % 优化效果蛮好，相关系数大于0.75
 
 对于GC很少的卷，SepBIT由于要维护FIFO，吞吐量相较别的放置策略损失了3.0% ~ 6.9%
+
+### 可能的改进
+
+
+## MIDAS: Minimizing Write Amplification in Log-Structured Systems through Adaptive Group Number and Size Configuration
+
+### 背景
+
+![img](https://img2023.cnblogs.com/blog/3067108/202403/3067108-20240323165258997-972712449.png)
+不同的数据放置策略对不同lifespan的块的预测准确率不同(各有所长)，红框部分被作者解释为当实验结束时还有一些coldest block(C6)正准备被划分为coldest block(C6)。
+![img](https://img2023.cnblogs.com/blog/3067108/202403/3067108-20240323170151797-1694524387.png)
+即使是ORA，如果不精心选择组的数量和大小也会导致suboptimal
+
+![img](https://img2023.cnblogs.com/blog/3067108/202403/3067108-20240323171411642-1706006996.png)
+考虑不同victim segement选择策略对WAF的影响，可以发现CB是最好的，而用ORA进行数据放置时，即使是FIFO，其WAF也是一样小的
+
+### 方法设计
+
+lifespan预测和group configuration是减少写放大的两个关键点。
+
+#### lifespan预测
+
+通过对块分group来实现
+
+![img](https://img2023.cnblogs.com/blog/3067108/202403/3067108-20240323171636488-1209402581.png)
+
+有1个HOT group，和N个COLD group，每个group有一定大小，当满了之后进行GC。
+先根据update interval判断是不是HOT块，如果是将其送入HOT group，如果不是送入$G_1$。
+COLD group顺次连接，$G_i$垃圾回收的有效块写入$G_{i+1}$，这样同一COLD group的age是相同的，其estimated lifespan也相同。（HOT写入 $G_1$， $G_N$仍写入 $G_N$）
+
+通过和SepBIT类似的方式根据update interval区分冷热块，即仅当lifespan为1/3 最近被回收段的平均lifespan时才从G1中提升块到HOT group中。
+
+#### group configuration
+
+通过UID和MCAM来估计group的调整对WAF的影响来实现
+
+MCAM是一个基于马尔可夫链的分析模型
+
+将block划分为valid和free态，valid又细分为 $V_H, V_{G_i}$，表示在HOT或 $G_i$ group中。给出这些状态的转移概率，当整个系统收敛时，计算其WAF用来估计真实的WAF。
+![img](https://img2023.cnblogs.com/blog/3067108/202403/3067108-20240323201050828-325856446.png)
+实验证明给出准确的转移概率后，WAF估计的错误率不会超过2.82%
+
+当然没办法事先给出精确的转移概率，MiDAS通过UID来估计转移概率
+update interval distribution中横轴是update interval其单位是写入的块数，纵轴是块还valid的概率。
+
+COLD group的转移概率：
+
+![img](https://img2023.cnblogs.com/blog/3067108/202403/3067108-20240323204721466-1304403288.png)
+则从0~$G_1$size的UID的积分是 $G_1$满时，其中的块还valid的概率。则据图转移概率为0.6/1 = 0.6
+而进入$G_2$的块，首先它们一定在$G_1$中经历过$G_1$size次write了，则从$G_1$size~$G_1$size + $G_2$size/($G_1$到$G_2$转移概率) 的UID的积分是 $G_2$满时，其中的块还valid的概率。则据图$G_2$到$G_3$转移概率为 0.14/0.6 = 0.35
+
+此类分析对于 $G_N$不适用，其转移概率照搬了Desnoyers的工作
+
+HOT group的转移概率：
+
+根据HOT group的定义，lifespan要小于1/3 阈值才会从free转移到HOT group，假设算法可以正确分辨hot block，则0 ~ 1/3  阈值 的 UID的积分即为free到HOT group的转移概率，但作者说用0 ~ 阈值的积分预测错误率仍小于 5 %，所以采用了 0 ~ 阈值的积分。
+![img](https://img2023.cnblogs.com/blog/3067108/202403/3067108-20240323205947020-1598724359.png)
+
+在区分了HOT 和 COLD group后，UID分别为
+![img](https://img2023.cnblogs.com/blog/3067108/202403/3067108-20240323211045428-1722000176.png)
+根据分析，HOT group的update interval全部小于阈值，故超出阈值后其valid概率为0；COLD group的update interval全部大于阈值，故小于阈值的部分其valid概率为1。
+
+有了UID就可以根据group configuration计算出转移概率，并用MCAM估计WAF了。
+但遍历所有configuration找出最优配置并不现实，故采用GCS启发式贪心算法找出足够优的解。
+
+![img](https://img2023.cnblogs.com/blog/3067108/202403/3067108-20240323211831101-1635330874.png)
+其首先将UID小于1segment的块放到HOT group中，其余的块放到$G_1$，据此设计一开始的HOT和 $G_1$ 的大小。
+之后其用MCAM开始计算WAF，然后将HOT段的UID范围加1segment，重新计算，直至WAF不再减少。
+这样HOT group的大小就最终确定了。递归地对$G_1$做分割处理即可。
+当递归至一定程度时，WAF没有明显的降低了就停止，此时组的数量和大小就初步确定了。
+
+$G_N$ 的写放大会比较高，因为它得到的块少(???why)，所以通过将其他组的segmetn重新分配给 $G_N$ 来解决这一问题。在分配1个segment时会重新计算WAF，如果WAF降低就重复这一过程，否则取消。
+
+仅在UID更新时重做GCS算法。
+
+MiDAS维护两个UID，一个为当前使用的，一个为当前得到的。在一个任期结束时，用新的UID估计WAF，如果WAF减少的超过一个阈值，就使用新的UID，否则在下个任期接着用旧的。
+
+MiDAS根据估计的WAF来调整组，这建立在I/O 特征的可估计性上。为了避免当I/O 特征难以估计时，使用MiDAS带来的劣化效果，引入了irregular I/O 处理机制。
+
+MiDAS定期检查其估计的转移概率和真实概率的误差，当检测到 $G_k$ 至 $G_{k+1}$ 的转移概率误差很大时，就停止调整除 $G_k$ 以外的组，并将从 $G_k$ 一直到 $G_N$ 的所有组都合并为 $G_k$，之后退化为 age-based MiDA。
+
+### 效果
+
 
 ### 可能的改进
